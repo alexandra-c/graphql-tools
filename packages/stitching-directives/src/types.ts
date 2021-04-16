@@ -1,23 +1,22 @@
 export interface PropertyTree {
-  [property: string]: null | PropertyTree;
+  [property: string]: any | PropertyTree;
 }
 
 export interface ParsedMergeArgsExpr {
-  args: Record<string, any>;
-  usedProperties: PropertyTree;
-  mappingInstructions?: Array<MappingInstruction>;
-  expansions?: Array<Expansion>;
+  args: PropertyTree;
+  keyDeclarations: Array<KeyDeclaration>;
+  expansions: Array<Expansion>;
 }
 
-export interface MappingInstruction {
-  destinationPath: Array<string>;
-  sourcePath: Array<string>;
+export interface KeyDeclaration {
+  valuePath: Array<string>;
+  keyPath: Array<string>;
 }
 
 export interface Expansion {
   valuePath: Array<string>;
   value: any;
-  mappingInstructions: Array<MappingInstruction>;
+  keyDeclarations: Array<KeyDeclaration>;
 }
 
 export type VariablePaths = Record<string, Array<string | number>>;

@@ -1,6 +1,6 @@
 import { PropertyTree } from './types';
 
-export function addProperty(object: Record<string, any>, path: Array<string | number>, value: any) {
+export function addKey(object: Record<string, any>, path: Array<string | number>, value: any) {
   const initialSegment = path[0];
   if (path.length === 1) {
     object[initialSegment] = value;
@@ -9,7 +9,7 @@ export function addProperty(object: Record<string, any>, path: Array<string | nu
 
   let field = object[initialSegment];
   if (field != null) {
-    addProperty(field, path.slice(1), value);
+    addKey(field, path.slice(1), value);
     return;
   }
 
@@ -18,55 +18,30 @@ export function addProperty(object: Record<string, any>, path: Array<string | nu
   } else {
     field = [];
   }
-  addProperty(field, path.slice(1), value);
+  addKey(field, path.slice(1), value);
   object[initialSegment] = field;
 }
 
-export function getProperty(object: Record<string, any>, path: Array<string>): any {
-  if (!path.length || object == null) {
-    return object;
-  }
-
-  const newPath = path.slice();
-  const key = newPath.shift();
-  const prop = object[key];
-
-  return getProperty(prop, newPath);
+export function getKey(object: Record<string, any>, path: Array<string>): any {
+  return path.reduce((acc, pathSegment) => acc[pathSegment], object);
 }
 
-export function getProperties(object: Record<string, any>, propertyTree: PropertyTree): any {
-  if (object == null) {
-    return object;
-  }
-
+export function getKeys(object: Record<string, any>, propertyTree: PropertyTree): any {
   const newObject = Object.create(null);
-
   Object.entries(propertyTree).forEach(([key, subKey]) => {
     if (subKey == null) {
       newObject[key] = object[key];
-      return;
+    } else {
+      newObject[key] = getKeys(object[key], subKey);
     }
-
-    const prop = object[key];
-
-    newObject[key] = deepMap(prop, (item) => getProperties(item, subKey));
   });
-
   return newObject;
 }
 
 export function propertyTreeFromPaths(paths: Array<Array<string>>): PropertyTree {
   const propertyTree = Object.create(null);
   paths.forEach(path => {
-    addProperty(propertyTree, path, null);
+    addKey(propertyTree, path, null);
   });
   return propertyTree;
-}
-
-function deepMap(arrayOrItem: any, fn: (item: any) => any): any {
-  if (Array.isArray(arrayOrItem)) {
-    return arrayOrItem.map(nestedArrayOrItem => deepMap(nestedArrayOrItem, fn));
-  }
-
-  return fn(arrayOrItem);
 }

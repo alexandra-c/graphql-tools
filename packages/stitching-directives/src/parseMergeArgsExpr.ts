@@ -1,17 +1,21 @@
 import { parseValue, SelectionSetNode, valueFromASTUntyped } from 'graphql';
 
-import { Expansion, MappingInstruction, ParsedMergeArgsExpr } from './types';
+import { Expansion, KeyDeclaration, ParsedMergeArgsExpr } from './types';
 
+import { expandUnqualifiedKeys } from './expandUnqualifiedKeys';
 import { extractVariables } from './extractVariables';
 import { EXPANSION_PREFIX, KEY_DELIMITER, preparseMergeArgsExpr } from './preparseMergeArgsExpr';
-import { propertyTreeFromPaths } from './properties';
-import { getSourcePaths } from './getSourcePaths';
+
+export interface PreparsedMergeArgsExpr {
+  mergeArgsExpr: string;
+  expansionExpressions: Record<string, string>;
+}
 
 type VariablePaths = Record<string, Array<string | number>>;
 
 export function parseMergeArgsExpr(
   mergeArgsExpr: string,
-  selectionSet?: SelectionSetNode,
+  selectionSets: Array<SelectionSetNode> = []
 ): ParsedMergeArgsExpr {
   const { mergeArgsExpr: newMergeArgsExpr, expansionExpressions } = preparseMergeArgsExpr(mergeArgsExpr);
 
@@ -24,11 +28,17 @@ export function parseMergeArgsExpr(
       throw new Error('Merge arguments must declare a key.');
     }
 
-    const mappingInstructions = getMappingInstructions(variablePaths);
+    const keyDeclarations = getKeyDeclarations(variablePaths);
 
-    const usedProperties = propertyTreeFromPaths(getSourcePaths(mappingInstructions, selectionSet));
+    const value = valueFromASTUntyped(newInputValue);
 
-    return { args: valueFromASTUntyped(newInputValue), usedProperties, mappingInstructions };
+    const { value: finalValue, keyDeclarations: finalKeyDeclarations } = expandUnqualifiedKeys(
+      value,
+      keyDeclarations,
+      selectionSets
+    );
+
+    return { args: finalValue, keyDeclarations: finalKeyDeclarations, expansions: [] };
   }
 
   const expansionRegEx = new RegExp(`^${EXPANSION_PREFIX}[0-9]+$`);
@@ -39,7 +49,6 @@ export function parseMergeArgsExpr(
   });
 
   const expansions: Array<Expansion> = [];
-  const sourcePaths: Array<Array<string>> = [];
   Object.keys(expansionExpressions).forEach(variableName => {
     const str = expansionExpressions[variableName];
     const valuePath = variablePaths[variableName];
@@ -51,36 +60,38 @@ export function parseMergeArgsExpr(
       throw new Error('Merge arguments must declare a key.');
     }
 
-    const mappingInstructions = getMappingInstructions(expansionVariablePaths);
+    const keyDeclarations = getKeyDeclarations(expansionVariablePaths);
 
     const value = valueFromASTUntyped(expansionInputValue);
 
-    sourcePaths.push(...getSourcePaths(mappingInstructions, selectionSet));
+    const { value: finalValue, keyDeclarations: finalKeyDeclarations } = expandUnqualifiedKeys(
+      value,
+      keyDeclarations,
+      selectionSets
+    );
 
     expansions.push({
       valuePath: assertNotWithinList(valuePath),
-      value,
-      mappingInstructions,
+      value: finalValue,
+      keyDeclarations: finalKeyDeclarations,
     });
   });
 
-  const usedProperties = propertyTreeFromPaths(sourcePaths);
-
-  return { args: valueFromASTUntyped(newInputValue), usedProperties, expansions };
+  return { args: valueFromASTUntyped(newInputValue), keyDeclarations: [], expansions };
 }
 
-function getMappingInstructions(variablePaths: VariablePaths): Array<MappingInstruction> {
-  const mappingInstructions: Array<MappingInstruction> = [];
+function getKeyDeclarations(variablePaths: VariablePaths): Array<KeyDeclaration> {
+  const keyDeclarations: Array<KeyDeclaration> = [];
   Object.entries(variablePaths).forEach(([keyPath, valuePath]) => {
     const splitKeyPath = keyPath.split(KEY_DELIMITER).slice(1);
 
-    mappingInstructions.push({
-      destinationPath: assertNotWithinList(valuePath),
-      sourcePath: splitKeyPath,
+    keyDeclarations.push({
+      valuePath: assertNotWithinList(valuePath),
+      keyPath: splitKeyPath,
     });
   });
 
-  return mappingInstructions;
+  return keyDeclarations;
 }
 
 function assertNotWithinList(path: Array<string | number>): Array<string> {

@@ -67,7 +67,6 @@ build
 temp
 .idea
 .bob
-.cache
 .DS_Store
 
 test-results/
